@@ -1,10 +1,15 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/msterzhang/onelist/api/auth"
@@ -23,12 +28,28 @@ func InitServer() {
 	crons.Load()
 }
 
+var static fs.FS
+
+func InitStatic(distDir string) {
+	if distDir == "" {
+		dist, err := fs.Sub(public.Public, "dist")
+		if err != nil {
+			log.Fatalf("failed to read dist dir")
+		}
+		static = dist
+		return
+	}
+	static = os.DirFS(distDir)
+}
+
 // 用于打包的静态文件
 func Static(r *gin.Engine) {
+	if static == nil {
+		InitStatic("")
+	}
 	folders := []string{"js", "css", "images", "fonts", "img"}
 	for i, folder := range folders {
-		folder = "dist/" + folder
-		sub, err := fs.Sub(public.Public, folder)
+		sub, err := fs.Sub(static, folder)
 		if err != nil {
 			log.Fatalf("can't find folder: %s", folder)
 		}
@@ -49,9 +70,12 @@ func Faviconico(c *gin.Context) {
 }
 
 func Run() {
-	// 初始化
 	InitServer()
+	r := Prepare()
+	r.Run(fmt.Sprintf(":%d", config.PORT))
+}
 
+func Prepare() *gin.Engine {
 	// Disable Console Color, you don't need console color when writing the logs to file.
 	gin.DisableConsoleColor()
 
@@ -324,5 +348,59 @@ func Run() {
 	r.GET("/gallery/*path", controllers.GalleryImgServer)
 	r.GET("/file/*path", controllers.FileServer)
 	r.POST("/file/gallery/upload", controllers.FileUpload, auth.JWTAuthAdmin())
-	r.Run(fmt.Sprintf(":%d", config.PORT))
+
+	return r
+}
+
+func ELE_EditConfig(isDebug bool) {
+	config.Load()
+
+	auto.Load()
+	crons.Load()
+}
+
+func ELE_Run(isDebug bool, publicHttp bool) (httpPort int, quit chan bool, err error) {
+	ELE_EditConfig(isDebug)
+
+	r := Prepare()
+
+	if isDebug {
+		publicHttp = true
+	}
+
+	var listenAddr = "127.0.0.1:5325"
+	if publicHttp {
+		listenAddr = "0.0.0.0:5325"
+	}
+
+	var listener net.Listener
+	listener, err = net.Listen("tcp", listenAddr)
+	if err != nil {
+		return
+	}
+
+	httpPort = listener.Addr().(*net.TCPAddr).Port
+
+	httpSrv := &http.Server{Handler: r}
+	go httpSrv.Serve(listener)
+
+	quit = make(chan bool, 1)
+	go func() {
+		<-quit
+		log.Println("Shutdown server...")
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := httpSrv.Shutdown(ctx); err != nil {
+				log.Fatal("HTTP server shutdown err: ", err)
+			}
+		}()
+		wg.Wait()
+		log.Println("Server exit")
+	}()
+
+	return
 }
