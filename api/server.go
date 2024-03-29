@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -355,7 +356,17 @@ func Prepare() *gin.Engine {
 	return r
 }
 
-func ELE_EditConfig(dataDir string, apiSecret string, theMovieDbKey string, alistToken string) {
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+func RandomString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+func ELE_EditConfig(dataDir string, isDebug bool, apiSecret string, theMovieDbKey string, alistToken string) {
 	config.DataDir = dataDir
 	os.MkdirAll(dataDir, 0700)
 
@@ -366,10 +377,16 @@ func ELE_EditConfig(dataDir string, apiSecret string, theMovieDbKey string, alis
 	config.KeyDb = theMovieDbKey
 	config.VideoTypes = ".mp4,.mkv,.flv"
 	config.AlistToken = alistToken
+	config.UserEmail = "admin"
+	if isDebug {
+		config.UserPassword = "admin"
+	} else {
+		config.UserPassword = RandomString(8)
+	}
 }
 
-func ELE_Run(dataDir string, isDebug bool, publicHttp bool, apiSecret string, theMovieDbKey string, alistToken string) (httpPort int, quit chan bool, err error) {
-	ELE_EditConfig(dataDir, apiSecret, theMovieDbKey, alistToken)
+func ELE_Run(dataDir string, isDebug bool, publicHttp bool, apiSecret string, theMovieDbKey string, alistToken string) (httpPort int, token string, quit chan bool, err error) {
+	ELE_EditConfig(dataDir, isDebug, apiSecret, theMovieDbKey, alistToken)
 
 	thedb.InitPath(dataDir)
 
@@ -417,6 +434,12 @@ func ELE_Run(dataDir string, isDebug bool, publicHttp bool, apiSecret string, th
 		wg.Wait()
 		log.Println("Server exit")
 	}()
+
+	_, token, err = auth.Login(config.UserEmail, config.UserPassword)
+	if err != nil {
+		quit <- true
+		return
+	}
 
 	return
 }
