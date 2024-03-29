@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -19,6 +20,8 @@ import (
 	"github.com/msterzhang/onelist/auto"
 	"github.com/msterzhang/onelist/config"
 	"github.com/msterzhang/onelist/public"
+
+	"github.com/msterzhang/onelist/plugins/thedb"
 )
 
 // 初始化配置及数据库
@@ -39,7 +42,7 @@ func InitStatic(distDir string) {
 		static = dist
 		return
 	}
-	static = os.DirFS(distDir)
+	static = os.DirFS(filepath.Join(config.DataDir, distDir))
 }
 
 // 用于打包的静态文件
@@ -59,7 +62,7 @@ func Static(r *gin.Engine) {
 
 func IndexView(c *gin.Context) {
 	c.Writer.WriteHeader(200)
-	b, _ := public.Public.ReadFile("dist/index.html")
+	b, _ := fs.ReadFile(static, "index.html")
 	_, _ = c.Writer.Write(b)
 	c.Writer.Header().Add("Accept", "text/html")
 	c.Writer.Flush()
@@ -352,15 +355,28 @@ func Prepare() *gin.Engine {
 	return r
 }
 
-func ELE_EditConfig(isDebug bool) {
-	config.Load()
+func ELE_EditConfig(dataDir string, apiSecret string, theMovieDbKey string, alistToken string) {
+	config.DataDir = dataDir
+	os.MkdirAll(dataDir, 0700)
+
+	config.Title = "ele"
+	config.DBDRIVER = "sqlite"
+	config.DbName = "onelist"
+	config.SECRETKEY = []byte(apiSecret)
+	config.KeyDb = theMovieDbKey
+	config.VideoTypes = ".mp4,.mkv,.flv"
+	config.AlistToken = alistToken
+}
+
+func ELE_Run(dataDir string, isDebug bool, publicHttp bool, apiSecret string, theMovieDbKey string, alistToken string) (httpPort int, quit chan bool, err error) {
+	ELE_EditConfig(dataDir, apiSecret, theMovieDbKey, alistToken)
+
+	thedb.InitPath(dataDir)
 
 	auto.Load()
 	crons.Load()
-}
 
-func ELE_Run(isDebug bool, publicHttp bool) (httpPort int, quit chan bool, err error) {
-	ELE_EditConfig(isDebug)
+	InitStatic("web")
 
 	r := Prepare()
 

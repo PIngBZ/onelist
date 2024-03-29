@@ -11,6 +11,8 @@ import (
 )
 
 var (
+	DataDir       = ""
+	AlistToken    = ""
 	EnvFile       = "config.env"
 	PORT          = 0
 	Title         = ""

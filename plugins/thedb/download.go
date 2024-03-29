@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/msterzhang/onelist/api/utils/dir"
 )
@@ -26,6 +27,10 @@ var keysEpisode = []string{"w227_and_h127_bestv2", "w710_and_h400_multi_faces", 
 
 // 下载横向海报图及背景图
 var keysBackImge = []string{"w355_and_h200_multi_faces", "w1920_and_h1080_bestv2"}
+
+func InitPath(dataDir string) {
+	imgpath = filepath.Join(dataDir, imgpath)
+}
 
 // 初始化图片保存目录
 func initDir() {

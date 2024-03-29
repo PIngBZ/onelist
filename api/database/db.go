@@ -3,6 +3,7 @@ package database
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/msterzhang/onelist/config"
@@ -22,7 +23,7 @@ func NewDb() *gorm.DB {
 
 func InitDb() error {
 	var err error
-	dia := sqlite.Open(config.DbName + ".db")
+	dia := sqlite.Open(filepath.Join(config.DataDir, config.DbName+".db"))
 	if config.DBDRIVER == "mysql" {
 		dia = mysql.Open(config.DBURL)
 	}
